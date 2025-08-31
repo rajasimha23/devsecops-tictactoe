@@ -157,7 +157,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           # set new image 
-          NEW_IMAGE="${REGISTRY}/${REPOSITORY}-${IMAGE_TAG}"
+          NEW_IMAGE="${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
 
           # replace old image with new image
           sed -i "s|image: ${REGISTRY}/.*|image: ${NEW_IMAGE}|g" kubernetes/deployment.yaml
