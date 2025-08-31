@@ -1,12 +1,12 @@
 name: cicd pipeline
 
-on: 
+on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths-ignore:
       - 'kubernetes/deployment.yaml'  # Ignore changes to this file to prevent loops
-  pull_requests:
-    branches: [main]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   test:
@@ -20,7 +20,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: ' npm'
+          cache: 'npm'
 
       - name: install dependencies
         run: npm ci
