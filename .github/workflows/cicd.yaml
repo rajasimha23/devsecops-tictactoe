@@ -169,5 +169,5 @@ jobs:
       - name: commit and push
         run: |
           git add .
-          git commit -m "updated deployment with new "image"
+          git commit -m "updated deployment with new image [skip ci]"
           git push
