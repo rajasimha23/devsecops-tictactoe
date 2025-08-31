@@ -79,7 +79,7 @@ jobs:
     needs: [build]
     env:
       REGISTRY: ghcr.io
-      IMAGE: ${{ github.repository }}
+      IMAGE_NAME: ${{ github.repository }}
     steps: 
       - name: checkout code
         uses: actions/checkout@v4
