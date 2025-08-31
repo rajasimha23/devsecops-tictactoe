@@ -56,8 +56,8 @@ The game implements the following rules:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/devsecops-demo.git
-   cd devsecops-demo
+   git clone https://github.com/rajasimha23/devsecops-tictactoe.git
+   cd devsecops-tictactoe
    ```
 
 2. Install dependencies:
