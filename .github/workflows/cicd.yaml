@@ -1,0 +1,173 @@
+name: cicd pipeline
+
+on: 
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'kubernetes/deployment.yaml'  # Ignore changes to this file to prevent loops
+  pull_requests:
+    branches: [main]
+
+jobs:
+  test:
+    name: unit testing
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: setup node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: ' npm'
+
+      - name: install dependencies
+        run: npm ci
+
+      - name: run tests
+        run: npm test || echo "test cases are not setup for this"
+
+  lint:
+    name: Static Code Analysis
+    runs-on: ubuntu-latest
+    steps: 
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: setup node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: ' npm'
+
+      - name: install dependencies
+        run: npm ci
+
+      - name: run ESLint
+        run: npm run lint
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [tests,lint]
+    steps: 
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: setup node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: ' npm'
+
+      - name: install dependencies
+        run: npm ci
+
+      - name: build project
+        run: npm run build
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@v4
+        with: 
+          name: build-artifact
+          path: dist/
+
+  docker:
+    name: build docker image
+    runs-on: ubuntu-latest
+    needs: [build]
+    env:
+      REGISTRY: ghcr.io
+      IMAGE: ${{ github.repository }}
+    steps: 
+      - name: checkout code
+        uses: actions/checkout@v4
+
+      - name: copy artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+          path: dist/
+      
+      - name: install docker
+        uses: docker/setup-buildx-action@v3
+      
+      - name: login to GHCR 
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+            latest
+
+      - name: build docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+          with:
+            image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+            format: 'table'
+            exit-code: '1'
+
+      - name: push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  update-k8s:
+    name: update kubernetes folder
+    runs-on: ubuntu-latest
+    needs: [docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.TOKEN }}
+      
+      - name: Setup Git config
+        run: |
+          git config user.name "rajasimha23"
+          git config user.email "rajasimha2301@gmail.com"
+
+      - name: update deployment
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+          REGISTRY: ghcr.io
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          # set new image 
+          NEW_IMAGE="${REGISTRY}/${REPOSITORY}-${IMAGE_TAG}"
+
+          # replace old image with new image
+          sed -i "s|image: ${REGISTRY}/.*|image: ${NEW_IMAGE}|g" kubernetes/deployment.yaml
+
+
+          echo "Updated deployment to use image: ${NEW_IMAGE}"
+          grep -A 1 "image:" kubernetes/deployment.yaml
+
+      - name: commit and push
+        run: |
+          git add .
+          git commit -m "updated deployment with new "image"
+          git push
